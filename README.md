@@ -8,6 +8,7 @@ It is intentionally **not** marketed as a general antivirus or RCE prevention sy
 
 - Uses event-driven filesystem notifications after one startup scan; it does not repeatedly crawl disks.
 - Defaults to `enforce = false`: it never changes a file until explicitly enabled.
+- De-duplicates identical pathname/hash alerts for five minutes, so create/chmod watcher bursts do not spam Discord.
 - Quarantines only files owned by the configured runtime UID when either a known SHA-256 matches or a strict executable loader signature matches at least four independent indicators.
 - Quarantine is an atomic rename. If the quarantine directory is on another filesystem, the action fails safely instead of copying and deleting.
 - Reads cron spools only to find a suspicious payload referenced from a watched directory. It never rewrites a crontab.

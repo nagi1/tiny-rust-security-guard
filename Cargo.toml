@@ -1,6 +1,6 @@
 [package]
 name = "tiny-rust-security-guard"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 description = "A small, conservative Linux filesystem guard for high-confidence execution and cron persistence indicators."

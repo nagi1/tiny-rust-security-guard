@@ -9,6 +9,8 @@ cron_paths = ["/var/spool/cron", "/var/spool/cron/crontabs"]
 known_sha256 = []
 # Never lower this below 4; doing so makes automatic quarantine too broad.
 signal_threshold = 4
+# Suppress repeated filesystem events for the same payload/hash.
+alert_dedup_secs = 300
 
 [action]
 # Begin in dry-run mode. Set true only after reviewing real production alerts.

@@ -6,12 +6,16 @@ use notify::{Config as WatchConfig, Event, EventKind, RecommendedWatcher, Recurs
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
+    collections::HashMap,
     fs::{self, File},
     io::{BufRead, BufReader, Read},
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
-    sync::mpsc::{Receiver, channel},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    sync::{
+        Mutex, OnceLock,
+        mpsc::{Receiver, channel},
+    },
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 const MAX_INSPECT_BYTES: u64 = 2 * 1024 * 1024;
@@ -73,6 +77,9 @@ struct DetectionConfig {
     /// Require this many loader indicators before heuristic quarantine. Minimum 4.
     #[serde(default = "default_signal_threshold")]
     signal_threshold: usize,
+    /// Suppress duplicate alerts for the same pathname and hash.
+    #[serde(default = "default_alert_dedup_secs")]
+    alert_dedup_secs: u64,
 }
 
 impl Default for DetectionConfig {
@@ -80,6 +87,7 @@ impl Default for DetectionConfig {
         Self {
             known_sha256: vec![],
             signal_threshold: default_signal_threshold(),
+            alert_dedup_secs: default_alert_dedup_secs(),
         }
     }
 }
@@ -118,6 +126,9 @@ fn default_cron_paths() -> Vec<PathBuf> {
 fn default_signal_threshold() -> usize {
     4
 }
+fn default_alert_dedup_secs() -> u64 {
+    300
+}
 fn default_quarantine_dir() -> PathBuf {
     "/var/lib/tiny-rust-security-guard/quarantine".into()
 }
@@ -130,6 +141,8 @@ struct Finding {
     reason: String,
     sha256: String,
 }
+
+static ALERT_DEDUP: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
 
 fn main() -> Result<()> {
     #[cfg(not(target_os = "linux"))]
@@ -291,6 +304,10 @@ fn handle(path: &Path, config: &Config) -> Result<()> {
     let Some(finding) = inspect(path, config)? else {
         return Ok(());
     };
+    let dedup_key = format!("{}:{}", path.display(), finding.sha256);
+    if !claim_alert(&dedup_key, config.detection.alert_dedup_secs) {
+        return Ok(());
+    }
     let prefix = if config.action.enforce {
         "🚨 **tiny-rust-security-guard:** quarantined"
     } else {
@@ -311,6 +328,20 @@ fn handle(path: &Path, config: &Config) -> Result<()> {
     }
     notify_discord(config, &message);
     Ok(())
+}
+
+fn claim_alert(key: &str, window_secs: u64) -> bool {
+    let now = Instant::now();
+    let mut entries = ALERT_DEDUP
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .expect("alert dedup mutex poisoned");
+    entries.retain(|_, previous| now.duration_since(*previous) < Duration::from_secs(window_secs));
+    if entries.contains_key(key) {
+        return false;
+    }
+    entries.insert(key.to_owned(), now);
+    true
 }
 
 fn initial_scan(config: &Config) -> Result<()> {
@@ -448,5 +479,12 @@ mod tests {
         let mut config = config_for(1);
         config.detection.signal_threshold = 3;
         assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn suppresses_duplicate_alerts_within_the_window() {
+        let key = format!("dedupe-test-{}", std::process::id());
+        assert!(claim_alert(&key, 300));
+        assert!(!claim_alert(&key, 300));
     }
 }
