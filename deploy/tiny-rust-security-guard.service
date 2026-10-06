@@ -1,0 +1,23 @@
+[Unit]
+Description=Tiny Rust Security Guard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/tiny-rust-security-guard/secret.env
+ExecStart=/usr/local/sbin/tiny-rust-security-guard --config /etc/tiny-rust-security-guard/config.toml watch
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/tmp /tmp /dev/shm /var/lib/tiny-rust-security-guard
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_FOWNER
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

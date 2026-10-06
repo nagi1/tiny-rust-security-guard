@@ -1,0 +1,20 @@
+[monitor]
+# `id -u www` (or your public PHP/runtime account)
+web_uid = 1001
+paths = ["/var/tmp", "/tmp", "/dev/shm"]
+cron_paths = ["/var/spool/cron", "/var/spool/cron/crontabs"]
+
+[detection]
+# Add confirmed payload SHA-256 values here. This is the safest detection mechanism.
+known_sha256 = []
+# Never lower this below 4; doing so makes automatic quarantine too broad.
+signal_threshold = 4
+
+[action]
+# Begin in dry-run mode. Set true only after reviewing real production alerts.
+enforce = false
+quarantine_dir = "/var/lib/tiny-rust-security-guard/quarantine"
+
+[notification]
+# Set this environment variable in the systemd EnvironmentFile, not here.
+discord_webhook_env = "TRSG_DISCORD_WEBHOOK_URL"
